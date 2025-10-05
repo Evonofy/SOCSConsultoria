@@ -9,62 +9,108 @@ import { useToast } from "@/hooks/use-toast";
 const Contact = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    message: ""
+    phone: "",
+    message: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Validate form
-    if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
+    // Validações client-side (duplicadas por segurança)
+    if (
+      !formData.name.trim() ||
+      !formData.email.trim() ||
+      !formData.message.trim()
+    ) {
       toast({
         title: "Erro",
-        description: "Por favor, preencha todos os campos.",
-        variant: "destructive"
+        description: "Por favor, preencha todos os campos obrigatórios.",
+        variant: "destructive",
       });
       setLoading(false);
       return;
     }
 
-    // Simple email validation
+    // Validação de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       toast({
         title: "Erro",
-        description: "Por favor, insira um email válido.",
-        variant: "destructive"
+        description: "Por favor, insira um e-mail válido.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Validação de telefone (se preenchido)
+    if (formData.phone.trim()) {
+      const phoneRegex = /^[\d\s\-\(\)\+]+$/;
+      const digitsOnly = formData.phone.replace(/\D/g, "");
+
+      if (!phoneRegex.test(formData.phone) || digitsOnly.length < 10) {
+        toast({
+          title: "Erro",
+          description: "Por favor, insira um telefone válido com DDD.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Validação de tamanho dos campos
+    if (
+      formData.name.length > 100 ||
+      formData.email.length > 255 ||
+      formData.message.length > 1000 ||
+      formData.phone.length > 20
+    ) {
+      toast({
+        title: "Erro",
+        description: "Um ou mais campos excedem o tamanho máximo permitido.",
+        variant: "destructive",
       });
       setLoading(false);
       return;
     }
 
     try {
-      // Create mailto link as fallback (will open email client)
-      const subject = encodeURIComponent(`Contato do site - ${formData.name}`);
-      const body = encodeURIComponent(
-        `Nome: ${formData.name}\nEmail: ${formData.email}\n\nMensagem:\n${formData.message}`
-      );
-      const mailtoLink = `mailto:contato@socsconsultoria.com.br?subject=${subject}&body=${body}`;
-      
-      window.location.href = mailtoLink;
-      
-      toast({
-        title: "Sucesso!",
-        description: "Seu cliente de email será aberto. Se não abrir automaticamente, envie um email para contato@socsconsultoria.com.br",
+      // URL do Google Apps Script
+      const SCRIPT_URL =
+        "https://script.google.com/macros/s/AKfycby1yz2a6iWWdaE7bIQSSTav_2RVb2LnhnjCjFwBn3xVEHyXMTcMnJyGlcpCZSIfyGsQ/exec";
+
+      const response = await fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors", // Necessário para Google Apps Script
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
       });
 
-      // Reset form
-      setFormData({ name: "", email: "", message: "" });
+      // Com no-cors, assumimos sucesso se não houver erro
+      toast({
+        title: "Sucesso!",
+        description:
+          "Sua mensagem foi enviada com sucesso. Entraremos em contato em breve!",
+      });
+
+      // Resetar formulário
+      setFormData({ name: "", email: "", phone: "", message: "" });
     } catch (error) {
+      console.error("Error:", error);
+
       toast({
         title: "Erro",
-        description: "Erro ao processar sua mensagem. Por favor, tente novamente ou envie diretamente para contato@socsconsultoria.com.br",
-        variant: "destructive"
+        description:
+          "Não foi possível enviar sua mensagem. Por favor, tente novamente ou entre em contato diretamente pelo e-mail.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -91,7 +137,8 @@ const Contact = () => {
               </div>
               <h3 className="font-bold mb-2">Endereço</h3>
               <p className="text-sm text-muted-foreground">
-                Alameda Capão 75, Jardim das Damas, 1827<br />
+                Alameda Capão 75, Jardim das Damas, 1827
+                <br />
                 São Paulo - SP - 04618-012
               </p>
             </CardContent>
@@ -102,8 +149,8 @@ const Contact = () => {
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Mail className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="font-bold mb-2">Email</h3>
-              <a 
+              <h3 className="font-bold mb-2">E-mail</h3>
+              <a
                 href="mailto:contato@socsconsultoria.com.br"
                 className="text-sm text-primary hover:underline"
               >
@@ -117,8 +164,8 @@ const Contact = () => {
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Phone className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="font-bold mb-2">Contato</h3>
-              <a 
+              <h3 className="font-bold mb-2">Telefone</h3>
+              <a
                 href="tel:+551130403022"
                 className="text-sm text-muted-foreground hover:text-primary"
               >
@@ -136,33 +183,63 @@ const Contact = () => {
                   <Input
                     placeholder="Nome*"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
                     required
                     maxLength={100}
+                    disabled={loading}
                   />
                 </div>
                 <div>
                   <Input
                     type="email"
-                    placeholder="Email*"
+                    placeholder="E-mail*"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
                     required
                     maxLength={255}
+                    disabled={loading}
                   />
                 </div>
               </div>
-              
+
+              <div>
+                <Input
+                  type="tel"
+                  placeholder="Telefone (opcional)"
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
+                  maxLength={20}
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Exemplo: (11) 99999-9999
+                </p>
+              </div>
+
               <Textarea
                 placeholder="Mensagem*"
                 rows={6}
                 value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, message: e.target.value })
+                }
                 required
                 maxLength={1000}
+                disabled={loading}
               />
 
-              <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading}>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full md:w-auto"
+                disabled={loading}
+              >
                 {loading ? "Enviando..." : "Enviar"}
               </Button>
             </form>
